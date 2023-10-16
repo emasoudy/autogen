@@ -2,10 +2,14 @@ from flask import Flask, render_template_string, request
 import win32com.client
 import openai
 import re
+import pythoncom
+import format_gpt_output
 from datetime import datetime, timedelta
 
 
 def get_email_action_points(person):
+    pythoncom.CoInitialize()
+    data = ""
     outlook = win32com.client.Dispatch(
         "Outlook.Application").GetNamespace("MAPI")
     # "6" refers to the inbox. No subfolder.
@@ -19,7 +23,7 @@ def get_email_action_points(person):
     messages = messages.Restrict("[ReceivedTime] >= '{}'".format(
         last_seven_days_date.strftime('%m/%d/%Y')))
 
-    openai.api_key = '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'
+    openai.api_key = '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'
 
     fullemails = ""
 
@@ -58,7 +62,7 @@ def get_email_action_points(person):
         temperature=0.5,
         max_tokens=100
     )
-    data += f"<p><b>GPT response:</b> {response.choices[0].text.strip()}</p>"
+    data += f"<p><b>GPT response:</b> {response['choices'][0]['message']['content']}</p>"
     data += "<hr>"
 
     return data
