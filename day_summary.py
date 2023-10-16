@@ -1,3 +1,4 @@
+import pytz
 import win32com.client
 import openai
 import re
@@ -12,15 +13,28 @@ inbox = outlook.GetDefaultFolder(6)  # "6" refers to the inbox. No subfolder.
 
 messages = inbox.Items
 
-# Get date from user
-user_date_str = input("Enter the date (MM/DD/YYYY): ")
-user_date = datetime.strptime(user_date_str, '%m/%d/%Y')
+riyadh = pytz.timezone('Asia/Riyadh')
+
+# Get sender name from user
+sender_name_filter = input("Enter sender name (leave empty for all): ").strip()
+
+# Get date range from user
+start_date_str = input("Enter the start date (MM/DD/YYYY): ")
+end_date_str = input("Enter the end date (MM/DD/YYYY): ")
+
+start_date = datetime.strptime(start_date_str, '%m/%d/%Y')
+start_date = riyadh.localize(start_date)
+
+end_date = datetime.strptime(end_date_str, '%m/%d/%Y')
+end_date = riyadh.localize(end_date)
+
 
 # Restrict to items on the user-specified date
 messages = messages.Restrict("[ReceivedTime] >= '{}' AND [ReceivedTime] <= '{}'".format(
-    user_date.strftime('%m/%d/%Y'),
-    (user_date + timedelta(days=1)).strftime('%m/%d/%Y')
+    start_date.strftime('%m/%d/%Y'),
+    end_date.strftime('%m/%d/%Y')
 ))
+
 
 # Get OpenAI API key
 config = configparser.ConfigParser()
@@ -33,9 +47,17 @@ openai.api_key = api_key
 emails_by_sender = {}
 
 for message in messages:
+    # Apply sender name filter
+    if sender_name_filter and sender_name_filter.lower() not in message.SenderName.lower():
+        continue
+
+    # Apply date range filter
+    if not (start_date <= message.SentOn <= end_date):
+        continue
+
     sender_name = message.SenderName
     email_data = "Subject: " + message.Subject + " | Snippet: " + \
-        message.body[:100]  # Shorten the body to a snippet
+        message.body[:2000]  # Shorten the body to a snippet
 
     # Collect emails by sender
     if sender_name not in emails_by_sender:
@@ -47,10 +69,10 @@ for message in messages:
 
 def process_batch(sender, email_batch):
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4",
         messages=[
-            {"role": "system", "content": f"You are a helpful assistant. Considering that I am Essam Masoudy known as Abu Abdulaziz, Here are emails from {sender} I received today"},
-            {"role": "user", "content": f"Please summarize these emails in short bullet points: {email_batch}"}
+            {"role": "system", "content": f"Act as a secretary for Essam Masoudy who known as Abu Abdulaziz, Here are emails from {sender}"},
+            {"role": "user", "content": f"Please summarize these emails in short bullet points and highlight any required actions for Essam: {email_batch}"}
         ],
         temperature=0.7,
         max_tokens=100
